@@ -12,9 +12,12 @@
 # 6. Summarize the news article using NLP techniques (HuggingFace Model)
 
 import requests
-from bs4 import BeautifulSoup
 import chardet
 import csv
+import os
+import pandas as pd
+from bs4 import BeautifulSoup
+from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 # URLs to scrape
 urls = ["https://www.channelnewsasia.com/topic/cybersecurity",
@@ -134,13 +137,51 @@ def store_articles_in_csv(articles, filename='articles.csv'):
             article['Description'] = article['Description'].encode(encoding).decode('utf-8', errors='replace')
             dict_writer.writerow(article)
 
+# Function to transform description to summary using T5 model.
+
+
+def summarize_articles(description):
+    # Load pre-trained model and tokenizer
+    model = T5ForConditionalGeneration.from_pretrained('t5-base')
+    tokenizer = T5Tokenizer.from_pretrained('t5-base')
+
+    # Preprocess description
+    text = "summarize: " + description
+
+    # Encode the text; Generate Summary, Then Decode the summary
+    input_ids = tokenizer.encode(text, return_tensors="pt")
+    summary_ids = model.generate(input_ids, num_beams=4, no_repeat_ngram_size=2,
+                                 min_length=30, max_length=100, early_stopping=True)
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    return summary
+
 
 # Main execution
-html_contents = get_html_content(urls)
-articles = parse_html_content(html_contents)
 
-if articles:
-    store_articles_in_csv(articles)
-    print(f"Stored {len(articles)} articles in articles.csv")
+
+filename = 'articles.csv'
+
+if os.path.exists(filename):
+    user_input = input("Do you want to rescrape the data from the website? (yes/no): ")
+    if user_input.lower() == "yes":
+        html_contents = get_html_content(urls)
+        articles = parse_html_content(html_contents)
+        store_articles_in_csv(articles, filename)
+        print(f"Stored {len(articles)} articles in {filename}")
+    else:
+        print("Using existing data from articles.csv")
 else:
-    print("No articles found.")
+    html_contents = get_html_content(urls)
+    articles = parse_html_content(html_contents)
+    store_articles_in_csv(articles, filename)
+    print(f"Stored {len(articles)} articles in {filename}")
+
+# Load articles from CSV
+articles_df = pd.read_csv(filename)
+
+# Summarize the descriptions and add them as a new column
+articles_df['Summary'] = articles_df['Description'].apply(summarize_articles)
+
+# Save the DataFrame back to the CSV file
+articles_df.to_csv(filename, index=False)
