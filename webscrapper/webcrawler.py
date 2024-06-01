@@ -17,7 +17,6 @@ import csv
 import os
 import pandas as pd
 from bs4 import BeautifulSoup
-from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 # URLs to scrape
 urls = ["https://www.channelnewsasia.com/topic/cybersecurity",
@@ -102,9 +101,25 @@ def parse_html_content(html_contents):
                     'content'] if article_soup.find('meta', {'name': 'keywords'}) else ''
 
                 if 'channelnewsasia' in full_link:
-                    description_div = article_soup.find(
-                        'div', {'class': ['content-detail__description content-detail__description--video', 'text']})
-                    description = description_div.get_text(separator=' ', strip=True)
+                    # Find all 'div' tags with class 'content-wrapper'
+                    content_wrappers = article_soup.find_all('div', {'class': 'content-wrapper'})
+
+                    descriptions = []
+                    for content_wrapper in content_wrappers:
+                        # Find 'div' tags with classes 'text' and 'text-long' within each 'content-wrapper'
+                        text_blocks = content_wrapper.find_all('div', {'class': ['text', 'text-long']})
+
+                        # If 'text' and 'text-long' blocks are found, find all 'p' tags within them
+                        if text_blocks:
+                            paragraphs = [block.find_all('p') for block in text_blocks]
+
+                            # Flatten the list of lists of 'p' tags and get the text from each 'p' tag
+                            description = ' '.join(p.text for p_list in paragraphs for p in p_list)
+                            descriptions.append(description)
+
+                    # Join all descriptions into a single string
+                    description = ' '.join(descriptions)
+
                 elif 'thehackernews' in full_link:
                     description_paragraphs = article_soup.find('div', {'class': 'articlebody'}).find_all('p')
                     description = ' '.join([p.text for p in description_paragraphs])
@@ -133,28 +148,12 @@ def store_articles_in_csv(articles, filename='articles.csv'):
         for article in articles:
             # Detect the encoding of the description
             encoding = chardet.detect(article['Description'].encode())['encoding']
+            # If chardet was unable to detect the encoding, use 'utf-8' as a default
+            if encoding is None:
+                encoding = 'utf-8'
             # Decode the description using the detected encoding
             article['Description'] = article['Description'].encode(encoding).decode('utf-8', errors='replace')
             dict_writer.writerow(article)
-
-# Function to transform description to summary using T5 model.
-
-
-def summarize_articles(description):
-    # Load pre-trained model and tokenizer
-    model = T5ForConditionalGeneration.from_pretrained('t5-base')
-    tokenizer = T5Tokenizer.from_pretrained('t5-base')
-
-    # Preprocess description
-    text = "summarize: " + description
-
-    # Encode the text; Generate Summary, Then Decode the summary
-    input_ids = tokenizer.encode(text, return_tensors="pt")
-    summary_ids = model.generate(input_ids, num_beams=4, no_repeat_ngram_size=2,
-                                 min_length=30, max_length=100, early_stopping=True)
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-
-    return summary
 
 
 # Main execution
@@ -176,12 +175,3 @@ else:
     articles = parse_html_content(html_contents)
     store_articles_in_csv(articles, filename)
     print(f"Stored {len(articles)} articles in {filename}")
-
-# Load articles from CSV
-articles_df = pd.read_csv(filename)
-
-# Summarize the descriptions and add them as a new column
-articles_df['Summary'] = articles_df['Description'].apply(summarize_articles)
-
-# Save the DataFrame back to the CSV file
-articles_df.to_csv(filename, index=False)
