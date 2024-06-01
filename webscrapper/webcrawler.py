@@ -14,6 +14,7 @@
 import requests
 import chardet
 import csv
+from dotenv import load_dotenv
 import os
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -187,7 +188,7 @@ def get_summary(text):
 
     url = 'https://api.jigsawstack.com/v1/ai/summary'
     # Replace with your actual API key
-    api_key = 'sk_db4b0fb422d26c3cc903849ce6b4470f4ed09cee125e4725accb5e3153e907de0f2c580be5bd40603afe688a9e24e5b1bfee46ead1816cb7eacb11520ae35f51024Q4QeSXEvNOwWLNgtDB'
+    api_key = os.getenv('API_KEY')
     headers = {
         'Content-Type': 'application/json',
         'x-api-key': api_key
