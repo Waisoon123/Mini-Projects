@@ -17,6 +17,7 @@ import csv
 import os
 import pandas as pd
 from bs4 import BeautifulSoup
+import json
 
 # URLs to scrape
 urls = ["https://www.channelnewsasia.com/topic/cybersecurity",
@@ -157,8 +158,6 @@ def store_articles_in_csv(articles, filename='articles.csv'):
 
 
 # Main execution
-
-
 filename = 'articles.csv'
 
 if os.path.exists(filename):
@@ -175,3 +174,32 @@ else:
     articles = parse_html_content(html_contents)
     store_articles_in_csv(articles, filename)
     print(f"Stored {len(articles)} articles in {filename}")
+
+# Read the CSV file into a DataFrame
+df = pd.read_csv(filename)
+
+# Define a function to call the API and get the summarized text
+
+
+def get_summary(text):
+    if pd.isnull(text):
+        return None
+
+    url = 'https://api.jigsawstack.com/v1/ai/summary'
+    # Replace with your actual API key
+    api_key = 'sk_db4b0fb422d26c3cc903849ce6b4470f4ed09cee125e4725accb5e3153e907de0f2c580be5bd40603afe688a9e24e5b1bfee46ead1816cb7eacb11520ae35f51024Q4QeSXEvNOwWLNgtDB'
+    headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': api_key
+    }
+    data = json.dumps({'text': text})
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()
+    return response.json()['summary']
+
+
+# Apply the function to the 'Description' column and store the results in a new column 'Summary'
+df['Summary'] = df['Description'].apply(get_summary)
+
+# Write the DataFrame back to the CSV file
+df.to_csv(filename, index=False)
