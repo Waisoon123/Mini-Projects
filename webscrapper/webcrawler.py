@@ -9,7 +9,8 @@
 # 3. Parse the HTML content.
 # 4. Extract useful information/data from the webpage.[Author, Date, Title, Content, Tags, URL of the news article page (sub-links)]
 # 5. Store it in a file (CSV).
-# 6. Summarize the news article using NLP techniques (HuggingFace Model)
+# 6. Summarize the news article using AI
+# 7. Send to personal email for consumption
 
 import requests
 import chardet
@@ -19,6 +20,7 @@ import os
 import pandas as pd
 from bs4 import BeautifulSoup
 import json
+from email_sender import send_email
 
 # URLs to scrape
 urls = ["https://www.channelnewsasia.com/topic/cybersecurity",
@@ -199,8 +201,26 @@ def get_summary(text):
     return response.json()['summary']
 
 
-# Apply the function to the 'Description' column and store the results in a new column 'Summary'
-df['Summary'] = df['Description'].apply(get_summary)
+# Initialize a flag to check if DataFrame has been modified
+df_modified = False
 
-# Write the DataFrame back to the CSV file
-df.to_csv(filename, index=False)
+# Check if 'Summary' column exists
+if 'Summary' in df.columns:
+    user_input = input("Do you want to resummarize the content? (yes/no): ")
+    if user_input.lower() == "yes":
+        # Apply the function to the 'Description' column and store the results in a new column 'Summary'
+        df['Summary'] = df['Description'].apply(get_summary)
+        df_modified = True
+    else:
+        print("Summary column already exists. Not resummarizing.")
+else:
+    # If 'Summary' column does not exist, apply the function to create it
+    df['Summary'] = df['Description'].apply(get_summary)
+    df_modified = True
+
+# Write the DataFrame back to the CSV file only if it has been modified
+if df_modified:
+    df.to_csv(filename, index=False)
+
+# Send the email
+send_email(df)
